@@ -2,12 +2,14 @@ package api
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	requstform "github.com/lejianwen/rustdesk-api/v2/http/request/api"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	"github.com/lejianwen/rustdesk-api/v2/service"
-	"net/http"
 )
 
 type Peer struct {
@@ -73,4 +75,31 @@ func (p *Peer) SysInfoVer(c *gin.Context) {
 	// 加上启动时间，方便client上传信息
 	v = fmt.Sprintf("%s\n%s", v, service.AllService.AppService.GetStartTime())
 	c.String(http.StatusOK, v)
+}
+
+func (p *Peer) PeerCheck(c *gin.Context) {
+	peerId := c.Query("peer_id")
+	if peerId == "" {
+		response.Fail(c, 400, "peer_id is required")
+		return
+	}
+
+	peer := service.AllService.PeerService.FindById(peerId)
+	if peer == nil || peer.RowId == 0 {
+		response.Success(c, gin.H{
+			"allowed": true,
+		})
+		return
+	}
+
+	osLower := strings.ToLower(peer.Os)
+	if strings.Contains(osLower, "android") || strings.Contains(osLower, "ios") {
+		response.Fail(c, 403, "Target device is a mobile platform")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"allowed": true,
+		"os":      peer.Os,
+	})
 }
