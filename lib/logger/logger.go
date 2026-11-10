@@ -1,10 +1,13 @@
 package logger
 
 import (
-	nested "github.com/antonfisher/nested-logrus-formatter"
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+
+	nested "github.com/antonfisher/nested-logrus-formatter"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -31,11 +34,16 @@ func New(c *Config) *log.Logger {
 	f := c.Path
 	var write io.Writer
 	if f != "" {
+		if dir := filepath.Dir(f); dir != "" && dir != "." {
+			_ = os.MkdirAll(dir, 0755)
+		}
 		fwriter, err := os.OpenFile(f, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
-			panic("open log file fail!")
+			fmt.Printf("Warning: failed to open log file %s: %v, falling back to stdout\n", f, err)
+			write = os.Stdout
+		} else {
+			write = io.MultiWriter(fwriter, os.Stdout)
 		}
-		write = io.MultiWriter(fwriter, os.Stdout)
 	} else {
 		write = os.Stdout
 	}
