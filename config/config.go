@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 const (
@@ -30,6 +32,8 @@ type Admin struct {
 	HelloFile       string `mapstructure:"hello-file"`
 	IdServerPort    int    `mapstructure:"id-server-port"`
 	RelayServerPort int    `mapstructure:"relay-server-port"`
+	Path            string `mapstructure:"path"`
+	Secret          string `mapstructure:"secret"`
 }
 type Config struct {
 	Lang       string `mapstructure:"lang"`
@@ -55,6 +59,18 @@ func (a *Admin) Init() {
 	}
 	if a.RelayServerPort == 0 {
 		a.RelayServerPort = DefaultRelayServerPort
+	}
+	if a.Path == "" {
+		if envPath := os.Getenv("ADMIN_PATH"); envPath != "" {
+			a.Path = envPath
+		}
+	}
+	if a.Path != "" {
+		a.Path = strings.TrimSpace(a.Path)
+		if !strings.HasPrefix(a.Path, "/") {
+			a.Path = "/" + a.Path
+		}
+		a.Path = strings.TrimRight(a.Path, "/")
 	}
 }
 

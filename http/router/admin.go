@@ -20,6 +20,7 @@ func Init(g *gin.Engine) {
 	}
 
 	adg := g.Group("/api/admin")
+	adg.Use(middleware.AdminGateAuth())
 	LoginBind(adg)
 	adg.POST("/user/register", (&admin.User{}).Register)
 
