@@ -35,6 +35,12 @@ func (l *Login) Login(c *gin.Context) {
 	// 检查登录限制
 	loginLimiter := global.LoginLimiter
 	clientIp := c.ClientIP()
+	banned, _ := loginLimiter.CheckSecurityStatus(clientIp)
+	if banned {
+		global.Logger.Warn(fmt.Sprintf("Login Rejected (Banned IP): %s", clientIp))
+		response.Error(c, response.TranslateMsg(c, "LoginBanned"))
+		return
+	}
 
 	f := &api.LoginForm{}
 	err := c.ShouldBindJSON(f)
@@ -83,6 +89,9 @@ func (l *Login) Login(c *gin.Context) {
 		Type:     model.LoginLogTypeAccount,
 		Platform: f.DeviceInfo.Os,
 	})
+
+	// 登录成功，清除登录限制
+	loginLimiter.RemoveAttempts(clientIp)
 
 	c.JSON(http.StatusOK, apiResp.LoginRes{
 		AccessToken: ut.Token,

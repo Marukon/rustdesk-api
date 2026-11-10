@@ -63,27 +63,35 @@ func (is *ServerCmdService) SendSocketCmd(ty string, port int, cmd string) (stri
 		tcp = "tcp"
 		addr = "127.0.0.1"
 	}
-	conn, err := net.Dial(tcp, fmt.Sprintf("%s:%v", addr, port))
+	conn, err := net.DialTimeout(tcp, fmt.Sprintf("%s:%v", addr, port), 2*time.Second)
 	if err != nil {
 		Logger.Debugf("%s connect to id server failed: %v", ty, err)
 		return "", err
 	}
 	defer conn.Close()
-	//发送命令
+
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+
+	// 发送命令
 	_, err = conn.Write([]byte(cmd))
 	if err != nil {
 		Logger.Debugf("%s send cmd failed: %v", ty, err)
 		return "", err
 	}
-	time.Sleep(100 * time.Millisecond)
-	//读取返回
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil && err.Error() != "EOF" {
-		Logger.Debugf("%s read response failed: %v", ty, err)
-		return "", err
+
+	// 循环读取完整返回
+	var result []byte
+	buf := make([]byte, 4096)
+	for {
+		n, rerr := conn.Read(buf)
+		if n > 0 {
+			result = append(result, buf[:n]...)
+		}
+		if rerr != nil {
+			break
+		}
 	}
-	return string(buf[:n]), nil
+	return string(result), nil
 }
 
 func (is *ServerCmdService) Update(f *model.ServerCmd) error {

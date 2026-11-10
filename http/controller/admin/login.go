@@ -37,7 +37,12 @@ func (ct *Login) Login(c *gin.Context) {
 	// 检查登录限制
 	loginLimiter := global.LoginLimiter
 	clientIp := c.ClientIP()
-	_, needCaptcha := loginLimiter.CheckSecurityStatus(clientIp)
+	banned, needCaptcha := loginLimiter.CheckSecurityStatus(clientIp)
+	if banned {
+		global.Logger.Warn(fmt.Sprintf("Admin Login Rejected (Banned IP): %s", clientIp))
+		response.Fail(c, 101, response.TranslateMsg(c, "LoginBanned"))
+		return
+	}
 
 	f := &admin.Login{}
 	err := c.ShouldBindJSON(f)

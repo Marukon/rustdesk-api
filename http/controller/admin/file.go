@@ -7,6 +7,7 @@ import (
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	"github.com/lejianwen/rustdesk-api/v2/lib/upload"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -62,22 +63,33 @@ func (f *File) Notify(c *gin.Context) {
 // @Router /admin/file/upload [post]
 // @Security token
 func (f *File) Upload(c *gin.Context) {
-	file, _ := c.FormFile("file")
-	timePath := time.Now().Format("20060102") + "/"
-	webPath := "/upload/" + timePath
-	path := global.Config.Gin.ResourcesPath + webPath
-	dst := path + file.Filename
-	err := os.MkdirAll(path, os.ModePerm)
+	file, err := c.FormFile("file")
+	if err != nil || file == nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError"))
+		return
+	}
+	baseFilename := filepath.Base(filepath.Clean(file.Filename))
+	if baseFilename == "" || baseFilename == "." || baseFilename == "/" || baseFilename == "\\" {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError"))
+		return
+	}
+	dateDir := time.Now().Format("20060102")
+	webPath := "/upload/" + dateDir + "/"
+	dirPath := filepath.Join(global.Config.Gin.ResourcesPath, "upload", dateDir)
+	dst := filepath.Join(dirPath, baseFilename)
+	err = os.MkdirAll(dirPath, os.ModePerm)
 	if err != nil {
+		response.Fail(c, 500, err.Error())
 		return
 	}
 	// 上传文件至指定目录
 	err = c.SaveUploadedFile(file, dst)
 	if err != nil {
+		response.Fail(c, 500, err.Error())
 		return
 	}
 	// 返回文件web地址
 	response.Success(c, gin.H{
-		"url": webPath + file.Filename,
+		"url": webPath + baseFilename,
 	})
 }

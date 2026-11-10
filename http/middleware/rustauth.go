@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 	"github.com/lejianwen/rustdesk-api/v2/service"
@@ -8,9 +10,22 @@ import (
 
 func RustAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		//fmt.Println(c.Request.URL, c.Request.Header)
-		//获取HTTP_AUTHORIZATION
-		token := c.GetHeader("Authorization")
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if authHeader == "" {
+			c.JSON(401, gin.H{
+				"error": "Unauthorized",
+			})
+			c.Abort()
+			return
+		}
+
+		var token string
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[7:])
+		} else {
+			token = authHeader
+		}
+
 		if token == "" {
 			c.JSON(401, gin.H{
 				"error": "Unauthorized",
@@ -18,16 +33,6 @@ func RustAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if len(token) <= 7 {
-			c.JSON(401, gin.H{
-				"error": "Unauthorized",
-			})
-			c.Abort()
-			return
-		}
-		//提取token，格式是Bearer {token}
-		//这里只是简单的提取
-		token = token[7:]
 
 		//验证token
 

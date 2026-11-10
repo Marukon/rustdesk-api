@@ -52,10 +52,18 @@ func (i *WebClient) ServerConfig(c *gin.Context) {
 // @Failure 500 {object} response.Response
 // @Router /shared-peer [post]
 func (i *WebClient) SharedPeer(c *gin.Context) {
-	j := &gin.H{}
-	c.ShouldBindJSON(j)
-	t := (*j)["share_token"].(string)
-	if t == "" {
+	j := make(map[string]interface{})
+	if err := c.ShouldBindJSON(&j); err != nil {
+		response.Fail(c, 101, "invalid json")
+		return
+	}
+	rawToken, ok := j["share_token"]
+	if !ok || rawToken == nil {
+		response.Fail(c, 101, "share_token is required")
+		return
+	}
+	t, ok := rawToken.(string)
+	if !ok || t == "" {
 		response.Fail(c, 101, "share_token is required")
 		return
 	}
@@ -86,6 +94,44 @@ func (i *WebClient) SharedPeer(c *gin.Context) {
 		"id_server": global.Config.Rustdesk.IdServer,
 		"key":       global.Config.Rustdesk.Key,
 		"peer":      pp,
+	})
+}
+
+// QuerySharePeer 汇合服务器查询分享Peer(适配rustdesk-server)
+// @Tags WEBCLIENT
+// @Summary 查询分享Peer
+// @Description 汇合服务器查询设备是否处于有效分享状态
+// @Accept  json
+// @Produce  json
+// @Param peer_id query string true "被控端ID"
+// @Param conn_type query string false "连接类型"
+// @Success 200 {object} response.Response
+// @Failure 400 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Router /query-share-peer [get]
+func (i *WebClient) QuerySharePeer(c *gin.Context) {
+	peerId := c.Query("peer_id")
+	if peerId == "" {
+		response.Fail(c, 400, "peer_id is required")
+		return
+	}
+
+	sr := service.AllService.ShareRecordService.InfoByPeerId(peerId)
+	if sr == nil || sr.Id == 0 {
+		response.Fail(c, 404, "peer not found")
+		return
+	}
+
+	if sr.Expire != 0 {
+		ca := time.Time(sr.CreatedAt)
+		if ca.Add(time.Second * time.Duration(sr.Expire)).Before(time.Now()) {
+			response.Fail(c, 404, "share expired")
+			return
+		}
+	}
+
+	response.Success(c, gin.H{
+		"peer_id": peerId,
 	})
 }
 

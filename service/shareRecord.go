@@ -8,10 +8,17 @@ import (
 type ShareRecordService struct {
 }
 
-// InfoById 根据用户id取用户信息
+// InfoById 根据id取信息
 func (srs *ShareRecordService) InfoById(id uint) *model.ShareRecord {
 	u := &model.ShareRecord{}
 	DB.Where("id = ?", id).First(u)
+	return u
+}
+
+// InfoByPeerId 根据peer_id取最新分享记录
+func (srs *ShareRecordService) InfoByPeerId(peerId string) *model.ShareRecord {
+	u := &model.ShareRecord{}
+	DB.Where("peer_id = ?", peerId).Order("id desc").First(u)
 	return u
 }
 

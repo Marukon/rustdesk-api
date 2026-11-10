@@ -195,7 +195,9 @@ func InitGlobal() {
 	}
 
 	//jwt
-	//fmt.Println(global.Config.Jwt.PrivateKey)
+	if global.Config.Jwt.Key == "" && global.Config.Rustdesk.Key != "" {
+		global.Config.Jwt.Key = global.Config.Rustdesk.Key
+	}
 	global.Jwt = jwt.NewJwt(global.Config.Jwt.Key, global.Config.Jwt.ExpireDuration)
 	//locker
 	global.Lock = lock.NewLocal()
