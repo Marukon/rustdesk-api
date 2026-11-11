@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
@@ -28,8 +29,21 @@ func (i *Index) AdminEntry(c *gin.Context) {
 	token := middleware.GenerateGateToken(secret)
 	c.SetCookie(middleware.AdminGateCookieName, token, int(middleware.GateTokenTTL.Seconds()), "/", "", false, true)
 
-	indexPath := filepath.Join(global.Config.Gin.ResourcesPath, "admin", "index.html")
-	c.File(indexPath)
+	candidates := []string{
+		filepath.Join(global.Config.Gin.ResourcesPath, "admin", "index.html"),
+		"/app/resources/admin/index.html",
+		"./resources/admin/index.html",
+		"resources/admin/index.html",
+	}
+	for _, p := range candidates {
+		if content, err := os.ReadFile(p); err == nil {
+			c.Header("Content-Type", "text/html; charset=utf-8")
+			c.Data(http.StatusOK, "text/html; charset=utf-8", content)
+			return
+		}
+	}
+
+	c.String(http.StatusNotFound, "404 Admin frontend not found")
 }
 
 func (i *Index) ConfigJs(c *gin.Context) {

@@ -15,7 +15,7 @@ admin:
   hello-file: "./conf/admin/hello.html"  #优先使用file
   hello: ""
   # 自定义管理后台秘密入口路径 (防止爆破与未授权探测，也可通过环境变量 RUSTDESK_API_ADMIN_PATH 或 ADMIN_PATH 设置)
-  path: ""
+  # path: ""
   # ID Server and Relay Server ports https://github.com/lejianwen/rustdesk-api/issues/257
   id-server-port: 21116  # ID Server port (for server cmd)
   relay-server-port: 21117 # ID Server port (for server cmd)

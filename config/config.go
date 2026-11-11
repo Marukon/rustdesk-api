@@ -60,9 +60,10 @@ func (a *Admin) Init() {
 	if a.RelayServerPort == 0 {
 		a.RelayServerPort = DefaultRelayServerPort
 	}
-	if a.Path == "" {
-		if envPath := os.Getenv("ADMIN_PATH"); envPath != "" {
-			a.Path = envPath
+	for _, envKey := range []string{"RUSTDESK_API_ADMIN_PATH", "ADMIN_PATH", "RUSTDESK_ADMIN_PATH"} {
+		if envVal := strings.TrimSpace(os.Getenv(envKey)); envVal != "" {
+			a.Path = envVal
+			break
 		}
 	}
 	if a.Path != "" {
