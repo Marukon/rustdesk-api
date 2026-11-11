@@ -9,6 +9,9 @@ app:
   token-expire: 168h
   web-sso: true #web auth sso
   disable-pwd-login: false #禁用密码登录
+  hide-cm: true #下发策略：隐藏被控端连接管理窗口，避免与鼠标手势冲突 (支持环境变量 RUSTDESK_API_APP_HIDE_CM)
+  # strategy:   #额外下发给客户端的策略选项 (心跳同步)
+  #   verification-method: "use-permanent-password"
 
 admin:
   title: "RustDesk API Admin"

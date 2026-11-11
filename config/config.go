@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"hash/crc32"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,15 +18,17 @@ const (
 )
 
 type App struct {
-	WebClient        int           `mapstructure:"web-client"`
-	Register         bool          `mapstructure:"register"`
-	RegisterStatus   int           `mapstructure:"register-status"`
-	ShowSwagger      int           `mapstructure:"show-swagger"`
-	TokenExpire      time.Duration `mapstructure:"token-expire"`
-	WebSso           bool          `mapstructure:"web-sso"`
-	DisablePwdLogin  bool          `mapstructure:"disable-pwd-login"`
-	CaptchaThreshold int           `mapstructure:"captcha-threshold"`
-	BanThreshold     int           `mapstructure:"ban-threshold"`
+	WebClient        int               `mapstructure:"web-client"`
+	Register         bool              `mapstructure:"register"`
+	RegisterStatus   int               `mapstructure:"register-status"`
+	ShowSwagger      int               `mapstructure:"show-swagger"`
+	TokenExpire      time.Duration     `mapstructure:"token-expire"`
+	WebSso           bool              `mapstructure:"web-sso"`
+	DisablePwdLogin  bool              `mapstructure:"disable-pwd-login"`
+	CaptchaThreshold int               `mapstructure:"captcha-threshold"`
+	BanThreshold     int               `mapstructure:"ban-threshold"`
+	HideCm           *bool             `mapstructure:"hide-cm"`
+	Strategy         map[string]string `mapstructure:"strategy"`
 }
 type Admin struct {
 	Title           string `mapstructure:"title"`
@@ -51,6 +55,64 @@ type Config struct {
 	Rustdesk   Rustdesk
 	Proxy      Proxy
 	Ldap       Ldap
+}
+
+func (a *App) Init() {
+	for _, envKey := range []string{"RUSTDESK_API_APP_HIDE_CM", "RUSTDESK_API_HIDE_CM", "HIDE_CM"} {
+		if envVal := strings.TrimSpace(os.Getenv(envKey)); envVal != "" {
+			val := envVal == "1" || strings.EqualFold(envVal, "true") || strings.EqualFold(envVal, "yes") || strings.EqualFold(envVal, "y")
+			a.HideCm = &val
+			break
+		}
+	}
+	if a.HideCm == nil {
+		def := true
+		a.HideCm = &def
+	}
+	if a.Strategy == nil {
+		a.Strategy = make(map[string]string)
+	}
+	if *a.HideCm {
+		if _, ok := a.Strategy["allow-hide-cm"]; !ok {
+			a.Strategy["allow-hide-cm"] = "Y"
+		}
+	} else {
+		if a.Strategy["allow-hide-cm"] == "Y" {
+			delete(a.Strategy, "allow-hide-cm")
+		}
+	}
+}
+
+func (a *App) GetStrategyOptions() map[string]string {
+	res := make(map[string]string)
+	for k, v := range a.Strategy {
+		res[k] = v
+	}
+	return res
+}
+
+func (a *App) GetStrategyTimestamp() int64 {
+	options := a.GetStrategyOptions()
+	if len(options) == 0 {
+		return 0
+	}
+	keys := make([]string, 0, len(options))
+	for k := range options {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteString("=")
+		b.WriteString(options[k])
+		b.WriteString(";")
+	}
+	h := crc32.ChecksumIEEE([]byte(b.String()))
+	if h == 0 {
+		return 1
+	}
+	return int64(h)
 }
 
 func (a *Admin) Init() {
@@ -110,6 +172,7 @@ func Init(rowVal *Config, path string) *viper.Viper {
 	}
 	rowVal.Rustdesk.LoadKeyFile()
 	rowVal.Admin.Init()
+	rowVal.App.Init()
 	return v
 }
 

@@ -1,13 +1,15 @@
 package api
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"github.com/lejianwen/rustdesk-api/v2/global"
 	requstform "github.com/lejianwen/rustdesk-api/v2/http/request/api"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
-	"net/http"
-	"time"
 )
 
 type Index struct {
@@ -45,21 +47,29 @@ func (i *Index) Heartbeat(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{})
 		return
 	}
-	if info.Uuid == "" {
-		c.JSON(http.StatusOK, gin.H{})
-		return
+	if info.Uuid != "" && info.Id != "" {
+		if service.AllService != nil && service.AllService.PeerService != nil {
+			peer := service.AllService.PeerService.FindById(info.Id)
+			if peer != nil && peer.RowId != 0 {
+				//如果在30s以内则不更新
+				if time.Now().Unix()-peer.LastOnlineTime >= 30 {
+					upp := &model.Peer{RowId: peer.RowId, LastOnlineTime: time.Now().Unix(), LastOnlineIp: c.ClientIP()}
+					service.AllService.PeerService.Update(upp)
+				}
+			}
+		}
 	}
-	peer := service.AllService.PeerService.FindById(info.Id)
-	if peer == nil || peer.RowId == 0 {
-		c.JSON(http.StatusOK, gin.H{})
-		return
+
+	ts := global.Config.App.GetStrategyTimestamp()
+	res := gin.H{
+		"modified_at": ts,
 	}
-	//如果在40s以内则不更新
-	if time.Now().Unix()-peer.LastOnlineTime >= 30 {
-		upp := &model.Peer{RowId: peer.RowId, LastOnlineTime: time.Now().Unix(), LastOnlineIp: c.ClientIP()}
-		service.AllService.PeerService.Update(upp)
+	if ts > 0 && info.ModifiedAt != ts {
+		res["strategy"] = gin.H{
+			"config_options": global.Config.App.GetStrategyOptions(),
+		}
 	}
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusOK, res)
 }
 
 // Version 版本
