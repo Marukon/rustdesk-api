@@ -54,6 +54,15 @@ func WebInit(g *gin.Engine) {
 				indexPath := filepath.Join(adminDir, "index.html")
 				content, err := os.ReadFile(indexPath)
 				if err != nil {
+					for _, altDir := range []string{"/app/resources/admin", "./resources/admin", "resources/admin"} {
+						if altContent, altErr := os.ReadFile(filepath.Join(altDir, "index.html")); altErr == nil {
+							content = altContent
+							err = nil
+							break
+						}
+					}
+				}
+				if err != nil {
 					global.Logger.Errorf("[ROUTER] Admin index.html not found at: %s (err: %v)", indexPath, err)
 					c.String(http.StatusNotFound, "404 Admin frontend not found")
 					return
@@ -63,7 +72,11 @@ func WebInit(g *gin.Engine) {
 				return
 			}
 
-			f, err := adminFS.Open(filepathParam)
+			targetFile := filepathParam
+			if !strings.HasPrefix(targetFile, "/") {
+				targetFile = "/" + targetFile
+			}
+			f, err := adminFS.Open(targetFile)
 			if err != nil {
 				c.String(http.StatusNotFound, "404 not found")
 				return
@@ -76,7 +89,10 @@ func WebInit(g *gin.Engine) {
 		g.GET(adminPath, func(c *gin.Context) {
 			c.Redirect(http.StatusMovedPermanently, adminPath+"/")
 		})
+		g.GET(adminPath+"/", serveAdmin)
 		g.GET(adminPath+"/*filepath", serveAdmin)
+		g.HEAD(adminPath, serveAdmin)
+		g.HEAD(adminPath+"/", serveAdmin)
 		g.HEAD(adminPath+"/*filepath", serveAdmin)
 	} else {
 		global.Logger.Warn("[ROUTER] Admin secret path is not set (ADMIN_PATH or RUSTDESK_API_ADMIN_PATH is empty). Admin UI is disabled.")
