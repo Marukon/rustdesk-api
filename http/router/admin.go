@@ -22,22 +22,6 @@ func Init(g *gin.Engine) {
 	adg := g.Group("/api/admin")
 	adg.Use(middleware.AdminGateAuth())
 
-	// 管理 API 根路径处理，避免直接探测或访问返回 404
-	adg.GET("", func(c *gin.Context) {
-		if global.Config.Admin.Path != "" {
-			c.Redirect(302, global.Config.Admin.Path+"/")
-			return
-		}
-		c.JSON(200, gin.H{"code": 0, "message": "RustDesk Admin API"})
-	})
-	adg.GET("/", func(c *gin.Context) {
-		if global.Config.Admin.Path != "" {
-			c.Redirect(302, global.Config.Admin.Path+"/")
-			return
-		}
-		c.JSON(200, gin.H{"code": 0, "message": "RustDesk Admin API"})
-	})
-
 	LoginBind(adg)
 	adg.POST("/user/register", (&admin.User{}).Register)
 

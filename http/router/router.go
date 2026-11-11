@@ -87,13 +87,7 @@ func WebInit(g *gin.Engine) {
 			fileServer.ServeHTTP(c.Writer, c.Request)
 		}
 
-		g.GET(adminPath, func(c *gin.Context) {
-			c.Redirect(http.StatusMovedPermanently, adminPath+"/")
-		})
-		g.GET(adminPath+"/", serveAdmin)
 		g.GET(adminPath+"/*filepath", serveAdmin)
-		g.HEAD(adminPath, serveAdmin)
-		g.HEAD(adminPath+"/", serveAdmin)
 		g.HEAD(adminPath+"/*filepath", serveAdmin)
 	} else {
 		global.Logger.Warn("[ROUTER] Admin secret path is not set (ADMIN_PATH or RUSTDESK_API_ADMIN_PATH is empty). Admin UI is disabled.")
