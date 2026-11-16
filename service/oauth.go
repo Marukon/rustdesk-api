@@ -43,6 +43,7 @@ type OauthCacheItem struct {
 	DeviceName string `json:"device_name"`
 	DeviceOs   string `json:"device_os"`
 	DeviceType string `json:"device_type"`
+	AdminLogin bool   `json:"-"`
 	OpenId     string `json:"open_id"`
 	Username   string `json:"username"`
 	Name       string `json:"name"`
@@ -95,12 +96,29 @@ func (os *OauthService) DeleteOauthCache(key string) {
 	OauthCache.Delete(key)
 }
 
+func (os *OauthService) ConsumeOauthCache(key string, item *OauthCacheItem) bool {
+	return OauthCache.CompareAndDelete(key, item)
+}
+
+func (os *OauthService) CompleteOauthLogin(key string, item *OauthCacheItem, userID uint) (*OauthCacheItem, bool) {
+	if item.Action != OauthActionTypeLogin || item.UserId != 0 {
+		return nil, false
+	}
+	updated := *item
+	updated.UserId = userID
+	return &updated, OauthCache.CompareAndSwap(key, item, &updated)
+}
+
 func (os *OauthService) BeginAuth(op string) (error error, state, verifier, nonce, url string) {
 	state = utils.RandomString(10) + strconv.FormatInt(time.Now().Unix(), 10)
 	verifier = ""
 	nonce = ""
 	if op == model.OauthTypeWebauth {
-		url = Config.Rustdesk.ApiServer + "/_admin/#/oauth/" + state
+		adminPath := Config.Admin.Path
+		if adminPath == "" {
+			adminPath = "/_admin"
+		}
+		url = strings.TrimRight(Config.Rustdesk.ApiServer, "/") + adminPath + "/#/oauth/" + state
 		//url = "http://localhost:8888/_admin/#/oauth/" + code
 		return nil, state, verifier, nonce, url
 	}

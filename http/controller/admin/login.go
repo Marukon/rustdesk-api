@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 	"github.com/lejianwen/rustdesk-api/v2/http/controller/api"
+	"github.com/lejianwen/rustdesk-api/v2/http/middleware"
 	"github.com/lejianwen/rustdesk-api/v2/http/request/admin"
 	apiReq "github.com/lejianwen/rustdesk-api/v2/http/request/api"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
@@ -36,7 +37,7 @@ func (ct *Login) Login(c *gin.Context) {
 
 	// 检查登录限制
 	loginLimiter := global.LoginLimiter
-	clientIp := c.ClientIP()
+	clientIp := middleware.AdminClientIP(c)
 	banned, needCaptcha := loginLimiter.CheckSecurityStatus(clientIp)
 	if banned {
 		global.Logger.Warn(fmt.Sprintf("Admin Login Rejected (Banned IP): %s", clientIp))
@@ -49,7 +50,7 @@ func (ct *Login) Login(c *gin.Context) {
 	if err != nil {
 		loginLimiter.RecordFailedAttempt(clientIp)
 		global.Logger.Warn(fmt.Sprintf("Login Fail: %s %s %s", "ParamsError", c.RemoteIP(), clientIp))
-		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError")+err.Error())
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError"))
 		return
 	}
 
@@ -64,6 +65,7 @@ func (ct *Login) Login(c *gin.Context) {
 	// 检查是否需要验证码
 	if needCaptcha {
 		if f.CaptchaId == "" || f.Captcha == "" || !loginLimiter.VerifyCaptcha(f.CaptchaId, f.Captcha) {
+			loginLimiter.RecordFailedAttempt(clientIp)
 			response.Fail(c, 101, response.TranslateMsg(c, "CaptchaError"))
 			return
 		}
@@ -90,6 +92,10 @@ func (ct *Login) Login(c *gin.Context) {
 		response.Fail(c, 101, response.TranslateMsg(c, "UserDisabled"))
 		return
 	}
+	if !service.AllService.UserService.IsAdmin(u) {
+		response.Fail(c, 101, response.TranslateMsg(c, "NoAccess"))
+		return
+	}
 
 	ut := service.AllService.UserService.Login(u, &model.LoginLog{
 		UserId:   u.Id,
@@ -106,7 +112,7 @@ func (ct *Login) Login(c *gin.Context) {
 }
 func (ct *Login) Captcha(c *gin.Context) {
 	loginLimiter := global.LoginLimiter
-	clientIp := c.ClientIP()
+	clientIp := middleware.AdminClientIP(c)
 	banned, needCaptcha := loginLimiter.CheckSecurityStatus(clientIp)
 	if banned {
 		response.Fail(c, 101, response.TranslateMsg(c, "LoginBanned"))
@@ -144,10 +150,12 @@ func (ct *Login) Captcha(c *gin.Context) {
 // @Failure 500 {object} response.Response
 // @Router /admin/logout [post]
 func (ct *Login) Logout(c *gin.Context) {
-	u := service.AllService.UserService.CurUser(c)
-	token, ok := c.Get("token")
-	if ok {
-		service.AllService.UserService.Logout(u, token.(string))
+	if token := c.GetHeader("api-token"); token != "" {
+		if err := service.AllService.UserService.RevokeSession(token); err != nil {
+			global.Logger.Warn("Could not revoke admin session during logout")
+			response.Fail(c, 500, response.TranslateMsg(c, "OperationFailed"))
+			return
+		}
 	}
 	response.Success(c, nil)
 }
@@ -163,7 +171,7 @@ func (ct *Login) Logout(c *gin.Context) {
 // @Router /admin/login-options [post]
 func (ct *Login) LoginOptions(c *gin.Context) {
 	loginLimiter := global.LoginLimiter
-	clientIp := c.ClientIP()
+	clientIp := middleware.AdminClientIP(c)
 	banned, needCaptcha := loginLimiter.CheckSecurityStatus(clientIp)
 	if banned {
 		response.Fail(c, 101, response.TranslateMsg(c, "LoginBanned"))
@@ -206,7 +214,8 @@ func (ct *Login) OidcAuth(c *gin.Context) {
 		Action:     service.OauthActionTypeLogin,
 		Op:         f.Op,
 		Id:         f.Id,
-		DeviceType: "webadmin",
+		DeviceType: model.LoginLogClientWebAdmin,
+		AdminLogin: true,
 		// DeviceOs: ct.Platform(c),
 		DeviceOs: f.DeviceInfo.Os,
 		Uuid:     f.Uuid,
@@ -231,7 +240,7 @@ func (ct *Login) OidcAuth(c *gin.Context) {
 // @Router /admin/oidc/auth-query [get]
 func (ct *Login) OidcAuthQuery(c *gin.Context) {
 	o := &api.Oauth{}
-	u, ut := o.OidcAuthQueryPre(c)
+	u, ut := o.OidcAuthQueryPre(c, true)
 	if ut == nil {
 		return
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/utils"
 	"gorm.io/gorm"
@@ -90,7 +91,8 @@ func (us *UserService) GenerateToken(u *model.User) string {
 	if len(Jwt.Key) > 0 {
 		return Jwt.GenerateToken(u.Id)
 	}
-	return utils.Md5(u.Username + time.Now().String())
+	// Preserve the 32-character opaque token format for clients without JWT.
+	return strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
 // Login 登录
@@ -206,6 +208,18 @@ func (us *UserService) Logout(u *model.User, token string) error {
 	return nil
 }
 
+// RevokeSession accepts only the caller's bearer token and is idempotent.
+func (us *UserService) RevokeSession(token string) error {
+	ut := &model.UserToken{}
+	if err := DB.Where("token = ?", token).Take(ut).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	return us.Logout(&model.User{IdModel: model.IdModel{Id: ut.UserId}}, token)
+}
+
 // Delete 删除用户和oauth信息
 func (us *UserService) Delete(u *model.User) error {
 	userCount := us.getAdminUserCount()
@@ -293,7 +307,11 @@ func (us *UserService) UpdatePassword(u *model.User, password string) error {
 
 // IsAdmin 是否管理员
 func (us *UserService) IsAdmin(u *model.User) bool {
-	return u != nil && *u.IsAdmin
+	return u != nil && u.IsAdmin != nil && *u.IsAdmin
+}
+
+func (us *UserService) CanAccessAdmin(u *model.User) bool {
+	return us.IsAdmin(u) && us.CheckUserEnable(u)
 }
 
 // RouteNames

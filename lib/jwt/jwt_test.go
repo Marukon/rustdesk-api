@@ -44,6 +44,19 @@ func TestGenerateToken(t *testing.T) {
 	fmt.Println(pk, token)
 }
 
+func TestIndependentSessions(t *testing.T) {
+	auth := NewJwt("test-signing-key", time.Hour)
+	first, second := auth.GenerateToken(1), auth.GenerateToken(1)
+	if first == second {
+		t.Fatal("distinct logins share a token")
+	}
+	for _, token := range []string{first, second} {
+		if id, err := auth.ParseToken(token); err != nil || id != 1 {
+			t.Fatalf("token no longer resolves to its user: %d, %v", id, err)
+		}
+	}
+}
+
 // 测试token解析
 func TestParseToken(t *testing.T) {
 	jwtService := NewJwt(pk, time.Second*1000)

@@ -25,9 +25,7 @@ func (i *Index) AdminEntry(c *gin.Context) {
 		return
 	}
 
-	secret := middleware.GetGateSecret()
-	token := middleware.GenerateGateToken(secret)
-	c.SetCookie(middleware.AdminGateCookieName, token, int(middleware.GateTokenTTL.Seconds()), "/", "", false, true)
+	middleware.SetAdminResponseHeaders(c)
 
 	candidates := []string{
 		filepath.Join(global.Config.Gin.ResourcesPath, "admin", "index.html"),
@@ -37,6 +35,7 @@ func (i *Index) AdminEntry(c *gin.Context) {
 	}
 	for _, p := range candidates {
 		if content, err := os.ReadFile(p); err == nil {
+			middleware.SetAdminGateCookie(c)
 			c.Header("Content-Type", "text/html; charset=utf-8")
 			c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 			return

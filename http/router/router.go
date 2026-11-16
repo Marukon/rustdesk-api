@@ -40,18 +40,15 @@ func WebInit(g *gin.Engine) {
 	adminPath := global.Config.Admin.Path
 	if adminPath != "" {
 		adminDir := getAdminResourcesDir()
-		global.Logger.Infof("[ROUTER] Admin secret path registered at: %s (resources dir: %s)", adminPath, adminDir)
+		global.Logger.Info("[ROUTER] Admin entry enabled")
 
 		adminFS := http.Dir(adminDir)
 		fileServer := http.StripPrefix(adminPath, http.FileServer(adminFS))
 
 		serveAdmin := func(c *gin.Context) {
-			secret := middleware.GetGateSecret()
-			token := middleware.GenerateGateToken(secret)
-			c.SetCookie(middleware.AdminGateCookieName, token, int(middleware.GateTokenTTL.Seconds()), "/", "", false, true)
-
 			filepathParam := c.Param("filepath")
 			if filepathParam == "" || filepathParam == "/" || filepathParam == "/index.html" {
+				middleware.SetAdminResponseHeaders(c)
 				indexPath := filepath.Join(adminDir, "index.html")
 				content, err := os.ReadFile(indexPath)
 				if err != nil {
@@ -68,7 +65,7 @@ func WebInit(g *gin.Engine) {
 					c.String(http.StatusNotFound, "404 Admin frontend not found")
 					return
 				}
-				c.Header("Content-Type", "text/html; charset=utf-8")
+				middleware.SetAdminGateCookie(c)
 				c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 				return
 			}

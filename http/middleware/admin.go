@@ -31,6 +31,11 @@ func BackendUserAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		if !service.AllService.UserService.IsAdmin(user) {
+			response.Fail(c, 403, response.TranslateMsg(c, "NoAccess"))
+			c.Abort()
+			return
+		}
 
 		c.Set("curUser", user)
 		c.Set("token", token)

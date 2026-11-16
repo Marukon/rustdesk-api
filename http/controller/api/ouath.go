@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
+	"github.com/lejianwen/rustdesk-api/v2/http/middleware"
 	"github.com/lejianwen/rustdesk-api/v2/http/request/api"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	apiResp "github.com/lejianwen/rustdesk-api/v2/http/response/api"
@@ -60,7 +61,7 @@ func (o *Oauth) OidcAuth(c *gin.Context) {
 	})
 }
 
-func (o *Oauth) OidcAuthQueryPre(c *gin.Context) (*model.User, *model.UserToken) {
+func (o *Oauth) OidcAuthQueryPre(c *gin.Context, adminLogin bool) (*model.User, *model.UserToken) {
 	var u *model.User
 	var ut *model.UserToken
 	q := &api.OidcAuthQuery{}
@@ -72,8 +73,9 @@ func (o *Oauth) OidcAuthQueryPre(c *gin.Context) (*model.User, *model.UserToken)
 	}
 
 	// 获取 OAuth 缓存
-	v := service.AllService.OauthService.GetOauthCache(q.Code)
-	if v == nil {
+	oauthService := service.AllService.OauthService
+	v := oauthService.GetOauthCache(q.Code)
+	if v == nil || v.Action != service.OauthActionTypeLogin || v.AdminLogin != adminLogin {
 		response.Error(c, response.TranslateMsg(c, "OauthExpired"))
 		return nil, nil
 	}
@@ -87,21 +89,32 @@ func (o *Oauth) OidcAuthQueryPre(c *gin.Context) (*model.User, *model.UserToken)
 
 	// 获取用户信息
 	u = service.AllService.UserService.InfoById(v.UserId)
-	if u == nil {
+	if u == nil || u.Id == 0 {
 		response.Error(c, response.TranslateMsg(c, "UserNotFound"))
 		return nil, nil
 	}
+	if adminLogin && !service.AllService.UserService.CanAccessAdmin(u) {
+		oauthService.ConsumeOauthCache(q.Code, v)
+		response.Fail(c, 101, response.TranslateMsg(c, "NoAccess"))
+		return nil, nil
+	}
 
-	// 删除 OAuth 缓存
-	service.AllService.OauthService.DeleteOauthCache(q.Code)
+	if !oauthService.ConsumeOauthCache(q.Code, v) {
+		response.Error(c, response.TranslateMsg(c, "OauthExpired"))
+		return nil, nil
+	}
 
 	// 创建登录日志并生成用户令牌
+	ip := c.ClientIP()
+	if adminLogin {
+		ip = middleware.AdminClientIP(c)
+	}
 	ut = service.AllService.UserService.Login(u, &model.LoginLog{
 		UserId:   u.Id,
 		Client:   v.DeviceType,
 		DeviceId: v.Id,
 		Uuid:     v.Uuid,
-		Ip:       c.ClientIP(),
+		Ip:       ip,
 		Type:     model.LoginLogTypeOauth,
 		Platform: v.DeviceOs,
 	})
@@ -125,7 +138,7 @@ func (o *Oauth) OidcAuthQueryPre(c *gin.Context) (*model.User, *model.UserToken)
 // @Failure 500 {object} response.ErrorResponse
 // @Router /oidc/auth-query [get]
 func (o *Oauth) OidcAuthQuery(c *gin.Context) {
-	u, ut := o.OidcAuthQueryPre(c)
+	u, ut := o.OidcAuthQueryPre(c, false)
 	if u == nil || ut == nil {
 		return
 	}
@@ -163,6 +176,9 @@ func (o *Oauth) OauthCallback(c *gin.Context) {
 			"message": "OauthExpired",
 		})
 		return
+	}
+	if oauthCache.AdminLogin {
+		middleware.SetAdminResponseHeaders(c)
 	}
 	nonce := oauthCache.Nonce
 	op := oauthCache.Op
@@ -222,6 +238,11 @@ func (o *Oauth) OauthCallback(c *gin.Context) {
 			return
 		}
 		user = service.AllService.UserService.InfoByOauthId(op, openid)
+		if oauthCache.AdminLogin && !service.AllService.UserService.CanAccessAdmin(user) {
+			oauthService.ConsumeOauthCache(cacheKey, oauthCache)
+			c.Redirect(http.StatusFound, global.Config.Admin.Path+"/#/login?oidc=denied")
+			return
+		}
 		if user == nil {
 			oauthConfig := oauthService.InfoByOp(op)
 			if !*oauthConfig.AutoRegister {
@@ -240,9 +261,15 @@ func (o *Oauth) OauthCallback(c *gin.Context) {
 				return
 			}
 		}
-		oauthCache.UserId = user.Id
-		oauthService.SetOauthCache(cacheKey, oauthCache, 0)
+		if _, ok := oauthService.CompleteOauthLogin(cacheKey, oauthCache, user.Id); !ok {
+			c.HTML(http.StatusOK, "oauth_fail.html", gin.H{"message": "OauthExpired"})
+			return
+		}
 		// 如果是webadmin，登录成功后跳转到webadmin
+		if oauthCache.AdminLogin {
+			c.Redirect(http.StatusFound, global.Config.Admin.Path+"/#/")
+			return
+		}
 		if oauthCache.DeviceType == model.LoginLogClientWebAdmin {
 			/*service.AllService.UserService.Login(u, &model.LoginLog{
 				UserId:   u.Id,

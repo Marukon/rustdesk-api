@@ -2,12 +2,14 @@ package middleware
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +21,21 @@ const (
 	AdminGateHeaderName = "X-Admin-Gate-Token"
 	GateTokenTTL        = 7 * 24 * time.Hour
 )
+
+// A deployment key is required to share gates across processes.
+var ephemeralGateSecret = sync.OnceValue(func() string {
+	var secret [32]byte
+	if _, err := rand.Read(secret[:]); err != nil {
+		panic("cannot generate admin gate secret")
+	}
+	return hex.EncodeToString(secret[:])
+})
+
+func SetAdminGateCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	secure := c.Request.TLS != nil || global.Config.Admin.SecureCookie
+	c.SetCookie(AdminGateCookieName, GenerateGateToken(GetGateSecret()), int(GateTokenTTL.Seconds()), "/", "", secure, true)
+}
 
 // GenerateGateToken 生成带 HMAC-SHA256 签名的门禁令牌
 func GenerateGateToken(secret string) string {
@@ -62,7 +79,7 @@ func GetGateSecret() string {
 	if global.Config.Jwt.Key != "" {
 		return global.Config.Jwt.Key
 	}
-	return "rustdesk-admin-gate-default-secret-salt"
+	return ephemeralGateSecret()
 }
 
 // AdminGateAuth 管理后台防爆破门禁验证中间件
@@ -84,7 +101,7 @@ func AdminGateAuth() gin.HandlerFunc {
 		}
 
 		if token == "" || !ValidateGateToken(token, secret) {
-			global.Logger.Warn(fmt.Sprintf("Admin gate blocked unauthorized access from IP: %s to %s", c.ClientIP(), c.Request.RequestURI))
+			global.Logger.Warnf("Admin gate blocked unauthorized access from IP: %s", AdminClientIP(c))
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "Forbidden: Admin access restricted",

@@ -2,8 +2,10 @@ package jwt
 
 import (
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type Jwt struct {
@@ -32,6 +34,7 @@ func (s *Jwt) GenerateToken(userId uint) string {
 		UserClaims{
 			UserId: userId,
 			RegisteredClaims: jwt.RegisteredClaims{
+				ID:        uuid.NewString(),
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.TokenExpireDuration)),
 			},
 		})

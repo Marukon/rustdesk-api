@@ -336,13 +336,5 @@ func (ct *User) Register(c *gin.Context) {
 		response.Fail(c, 101, response.TranslateMsg(c, "RegisterSuccessWaitAdminConfirm"))
 		return
 	}
-	// 注册成功后自动登录
-	ut := service.AllService.UserService.Login(u, &model.LoginLog{
-		UserId: u.Id,
-		Client: model.LoginLogClientWebAdmin,
-		Uuid:   "",
-		Ip:     c.ClientIP(),
-		Type:   model.LoginLogTypeAccount,
-	})
-	responseLoginSuccess(c, u, ut.Token)
+	response.Success(c, gin.H{"registered": true})
 }

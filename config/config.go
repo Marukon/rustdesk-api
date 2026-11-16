@@ -38,6 +38,7 @@ type Admin struct {
 	RelayServerPort int    `mapstructure:"relay-server-port"`
 	Path            string `mapstructure:"path"`
 	Secret          string `mapstructure:"secret"`
+	SecureCookie    bool   `mapstructure:"secure-cookie"`
 }
 type Config struct {
 	Lang       string `mapstructure:"lang"`
@@ -146,6 +147,8 @@ func Init(rowVal *Config, path string) *viper.Viper {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	v.SetEnvPrefix("RUSTDESK_API")
+	v.SetDefault("admin.secure-cookie", false)
+	v.SetDefault("admin.secret", "")
 	v.SetConfigFile(path)
 	v.SetConfigType("yaml")
 	err := v.ReadInConfig()

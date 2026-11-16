@@ -59,6 +59,13 @@
 
 ## 功能
 
+### 管理后台安全
+
+- 管理后台的密码登录、第三方登录和已登录请求只接受启用的管理员账号。管理员的第三方身份须提前绑定。注册开启时仍可创建客户端账号，注册后请通过 RustDesk 客户端登录。
+- 后台入口沿用 `RUSTDESK_API_ADMIN_PATH`。公网部署请使用 HTTPS；如果 TLS 在反向代理终止，设置 `RUSTDESK_API_ADMIN_SECURE_COOKIE=true`，并将 `RUSTDESK_API_GIN_TRUST_PROXY` 限定为实际代理的 IP 或网段。代理需覆盖外部传入的转发地址头。直连 HTTP 的现有部署可保留默认配置。
+- 可用 `RUSTDESK_API_ADMIN_SECRET` 配置与 JWT 独立的门禁密钥。未设置时沿用配置的 JWT 密钥；两者都为空时采用单进程随机密钥，重启后重新访问后台入口即可。多实例部署请在各实例配置同一个独立门禁密钥；OIDC 仍需保证发起、回调和查询落到同一 API 实例。
+- 建议同时更新 API 和管理前端。仅启用第三方登录的部署，升级前先确认至少有一个启用的管理员已绑定身份。更新后用管理员账号登录并退出，再确认普通账号仍能登录 RustDesk 客户端。
+
 
 ### API 服务 
 基本实现了PC端基础的接口。支持Personal版本接口，可以通过配置文件`rustdesk.personal`或环境变量`RUSTDESK_API_RUSTDESK_PERSONAL`来控制是否启用

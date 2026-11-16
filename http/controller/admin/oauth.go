@@ -8,6 +8,7 @@ import (
 	"github.com/lejianwen/rustdesk-api/v2/http/request/admin"
 	adminReq "github.com/lejianwen/rustdesk-api/v2/http/request/admin"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
+	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
 )
 
@@ -77,14 +78,17 @@ func (o *Oauth) Confirm(c *gin.Context) {
 		return
 	}
 	v := service.AllService.OauthService.GetOauthCache(j.Code)
-	if v == nil {
+	if v == nil || v.Op != model.OauthTypeWebauth {
 		response.Fail(c, 101, response.TranslateMsg(c, "OauthExpired"))
 		return
 	}
 	u := service.AllService.UserService.CurUser(c)
-	v.UserId = u.Id
-	service.AllService.OauthService.SetOauthCache(j.Code, v, 0)
-	response.Success(c, v)
+	confirmed, ok := service.AllService.OauthService.CompleteOauthLogin(j.Code, v, u.Id)
+	if !ok {
+		response.Fail(c, 101, response.TranslateMsg(c, "OauthExpired"))
+		return
+	}
+	response.Success(c, confirmed)
 }
 
 func (o *Oauth) BindConfirm(c *gin.Context) {
