@@ -19,7 +19,6 @@ jobs:
         job:
           - { platform: "amd64", goos: "linux", file_ext: "tar.gz" }
           - { platform: "arm64", goos: "linux", file_ext: "tar.gz" }
-          - { platform: "armv7l", goos: "linux", file_ext: "tar.gz" }
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -82,11 +81,6 @@ jobs:
               tar -xf aarch64-linux-musl-cross.tgz
               export PATH=$PATH:$PWD/aarch64-linux-musl-cross/bin
               GOOS=${{ matrix.job.goos }} GOARCH=${{ matrix.job.platform }} CC=aarch64-linux-musl-gcc CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -ldflags "-s -w" -o ./release/apimain ./cmd/apimain.go
-          elif [ "${{ matrix.job.platform }}" = "armv7l" ]; then
-              wget https://musl.ljw.red/armv7l-linux-musleabihf-cross.tgz
-              tar -xf armv7l-linux-musleabihf-cross.tgz
-              export PATH=$PATH:$PWD/armv7l-linux-musleabihf-cross/bin
-              GOOS=${{ matrix.job.goos }} GOARCH=arm GOARM=7 CC=armv7l-linux-musleabihf-gcc CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -ldflags "-s -w" -o ./release/apimain ./cmd/apimain.go
           else
             sudo apt-get install musl musl-dev musl-tools -y
             GOOS=${{ matrix.job.goos }} GOARCH=${{ matrix.job.platform }} CC=musl-gcc CGO_LDFLAGS="-static" CGO_ENABLED=1 go build -ldflags "-s -w" -o ./release/apimain ./cmd/apimain.go
@@ -110,7 +104,6 @@ jobs:
         job:
           - { platform: "amd64", goos: "linux",  docker_platform: "linux/amd64" }
           - { platform: "arm64", goos: "linux",  docker_platform: "linux/arm64" }
-          - { platform: "armv7l", goos: "linux",  docker_platform: "linux/arm/v7" }
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -205,7 +198,6 @@ jobs:
           base-image: ${{ env.DOCKER_IMAGE }}:${{ env.TAG }}
           extra-images: |
             ${{ env.DOCKER_IMAGE }}:${{ env.TAG }}-amd64,
-            ${{ env.DOCKER_IMAGE }}:${{ env.TAG }}-armv7l,
             ${{ env.DOCKER_IMAGE }}:${{ env.TAG }}-arm64
           push: true
 
@@ -215,7 +207,6 @@ jobs:
           base-image: ${{ env.DOCKER_IMAGE }}:latest
           extra-images: |
             ${{ env.DOCKER_IMAGE }}:latest-amd64,
-            ${{ env.DOCKER_IMAGE }}:latest-armv7l,
             ${{ env.DOCKER_IMAGE }}:latest-arm64
           push: true
 
@@ -225,6 +216,5 @@ jobs:
           base-image: ${{ env.DOCKER_IMAGE }}:full-s6
           extra-images: |
             ${{ env.DOCKER_IMAGE }}:full-s6-amd64,
-            ${{ env.DOCKER_IMAGE }}:full-s6-armv7l,
             ${{ env.DOCKER_IMAGE }}:full-s6-arm64
           push: true
